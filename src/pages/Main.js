@@ -1,61 +1,131 @@
 import React, { Component, Fragment } from "react";
-import PropTypes from "prop-types";
+import MapGL, { Marker } from "react-map-gl";
+import Modal from "react-modal";
 import { connect } from "react-redux";
 import { bindActionCreators } from "redux";
 
 import * as gitUserActions from "../store/actions/gituser";
 
+import "mapbox-gl/dist/mapbox-gl.css";
+import GitUserList from "../components/GitUserList";
+import { StyleModal, FormAdd, IconMarker } from "./styles";
+
 class Main extends Component {
   state = {
-    userInput: ""
+    viewport: {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      latitude: -21.253085,
+      longitude: -48.324299,
+      zoom: 12
+    },
+    userInput: "",
+    latitude: "",
+    longitude: "",
+    modalOpen: false
   };
 
-  static propTypes = {
-    addGitUserRequest: PropTypes.func,
-    gitUser: PropTypes.shape({
-      loading: PropTypes.bool,
-      data: PropTypes.arrayOf(PropTypes.shape({})),
-      error: PropTypes.oneOfType([PropTypes.string])
-    }).isRequired
+  componentDidMount() {
+    window.addEventListener("resize", this._resize);
+    this._resize();
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener("resize", this._resize);
+  }
+
+  _resize = () => {
+    this.setState({
+      viewport: {
+        ...this.state.viewport,
+        width: window.innerWidth,
+        height: window.innerHeight
+      }
+    });
+  };
+
+  handleMapClick = e => {
+    const [latitude, longitude] = e.lngLat;
+
+    this.setState({ latitude: longitude, longitude: latitude });
+    this.handleOpenModal();
+  };
+
+  handleOpenModal = () => {
+    this.setState({ modalOpen: true });
+  };
+
+  handleCloseModal = () => {
+    this.setState({ modalOpen: false });
+  };
+
+  handleUserInput = e => {
+    this.setState({ userInput: e.target.value });
   };
 
   handleAddUser = e => {
     e.preventDefault();
     //const { data } = await api.get(`/${this.state.userInput}`);
-    this.props.addGitUserRequest(this.state.userInput);
+    const { userInput, latitude, longitude } = this.state;
+    this.props.addGitUserRequest({ userInput, latitude, longitude });
     this.setState({ userInput: "" });
+    this.handleCloseModal();
   };
-
   render() {
+    const { gitUser } = this.props;
     return (
       <Fragment>
-        <div>
-          <form onSubmit={this.handleAddUser}>
-            <p>Adicionar usuário do GitHub</p>
-            <input
-              placeholder="Usuário do github"
-              value={this.state.userInput}
-              onChange={e => this.setState({ userInput: e.target.value })}
-            />
-            <button type="submit">Salvar</button>
+        <GitUserList />
+        <MapGL
+          {...this.state.viewport}
+          onClick={this.handleMapClick}
+          mapStyle="mapbox://styles/mapbox/basic-v9"
+          mapboxApiAccessToken={
+            "pk.eyJ1Ijoia2lsc29ueiIsImEiOiJjanFkeWRtZHA0bnUyM3htc2hqaG43MjQ3In0.-6SATa01YQTiBqMQTp_5qA"
+          }
+          onViewportChange={viewport => this.setState({ viewport })}
+        >
+          {gitUser.data.map(item => (
+            <Marker
+              key={item.id}
+              latitude={item.latitude}
+              longitude={item.longitude}
+              onClick={this.handleMapClick}
+              captureClick={true}
+            >
+              <IconMarker src={item.avatar_url} alt="avatar" />
+            </Marker>
+          ))}
+        </MapGL>
 
-            {this.props.gitUser.loading && <span>Carregando...</span>}
-
-            {!!this.props.gitUser.error && (
-              <span style={{ color: "#F00" }}>{this.props.gitUser.error}</span>
-            )}
-          </form>
-        </div>
-        {this.props.gitUser.data.map(item => (
-          <ul key={item.id}>
-            <img src={item.avatar_url} alt="avatar" />
-            <li>{item.name}</li>
-            <li>{item.login}</li>
-            <button onClick={() => this.props.removeGitUserRequest(item.id)}>
-              Remover
-            </button>
-          </ul>
-        ))}
+        <Modal isOpen={this.state.modalOpen} style={StyleModal}>
+          <FormAdd>
+            <form>
+              <span>Adicionar novo usuário</span>
+              <input
+                placeholder="Usuário no github"
+                value={this.state.userInput}
+                onChange={this.handleUserInput}
+              />
+              <div>
+                <button
+                  onClick={this.handleCloseModal}
+                  className="btn close"
+                  type="button"
+                >
+                  Fechar
+                </button>
+                <button
+                  onClick={this.handleAddUser}
+                  type="submit"
+                  className="btn save"
+                >
+                  Salvar
+                </button>
+              </div>
+            </form>
+          </FormAdd>
+        </Modal>
       </Fragment>
     );
   }
